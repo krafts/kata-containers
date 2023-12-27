@@ -222,17 +222,17 @@ impl Vm {
             .confidential_vm_type
         {
             None => Arc::new(kvm.create_vm()?),
-            Some(confidential_vm_type) => {
-                #[cfg(not(any(target_arch = "x86_64")))]
+            Some(_confidential_vm_type) => {
+                #[cfg(not(any(target_arch = "aarch64")))]
                 {
                     error!(
-                        "confidential-vm-type {} only can be used in x86_64",
+                        "confidential-vm-type {} only can be used in aarch64",
                         confidential_vm_type as u64
                     );
                     return Err(Error::ConfidentialVmType);
                 }
-                #[cfg(target_arch = "x86_64")]
-                Arc::new(kvm.create_vm_with_type(confidential_vm_type as u64)?)
+                #[cfg(target_arch = "aarch64")]
+                Arc::new(kvm.create_vm()?)
             }
         };
         let resource_manager = Arc::new(ResourceManager::new(Some(kvm.max_memslots())));
