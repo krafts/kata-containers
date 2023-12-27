@@ -85,8 +85,8 @@ function get_container_runtime() {
 		else
 			echo "k3s"
 		fi
-	# Note: we assumed you used a conventional k0s setup and k0s will generate a systemd entry k0scontroller.service and k0sworker.service respectively    
-	# and it is impossible to run this script without a kubelet, so this k0s controller must also have worker mode enabled 
+	# Note: we assumed you used a conventional k0s setup and k0s will generate a systemd entry k0scontroller.service and k0sworker.service respectively
+	# and it is impossible to run this script without a kubelet, so this k0s controller must also have worker mode enabled
 	elif host_systemctl is-active --quiet k0scontroller; then
 		echo "k0s-controller"
 	elif host_systemctl is-active --quiet k0sworker; then
@@ -98,14 +98,14 @@ function get_container_runtime() {
 
 function install_artifacts() {
 	echo "copying kata artifacts onto host"
-	cp -au /opt/kata-artifacts/opt/kata/* /opt/kata/
-	chmod +x /opt/kata/bin/*
-	[ -d /opt/kata/runtime-rs/bin ] && \
-		chmod +x /opt/kata/runtime-rs/bin/*
+	cp -au /opt/kata-artifacts/opt/kata/* /opt/confidential-containers/
+	chmod +x /opt/confidential-containers/bin/*
+	[ -d /opt/confidential-containers/runtime-rs/bin ] && \
+		chmod +x /opt/confidential-containers/runtime-rs/bin/*
 
 	# Allow enabling debug for Kata Containers
 	if [[ "${DEBUG}" == "true" ]]; then
-		config_path="/opt/kata/share/defaults/kata-containers/"
+		config_path="/opt/confidential-containers/share/defaults/kata-containers/"
 		for shim in "${shims[@]}"; do
 			sed -i -e 's/^#\(enable_debug\).*=.*$/\1 = true/g' "${config_path}/configuration-${shim}.toml"
 			sed -i -e 's/^#\(debug_console_enabled\).*=.*$/\1 = true/g' "${config_path}/configuration-${shim}.toml"
@@ -115,8 +115,8 @@ function install_artifacts() {
 
 	# Allow Mariner to use custom configuration.
 	if [ "${HOST_OS:-}" == "cbl-mariner" ]; then
-		config_path="/opt/kata/share/defaults/kata-containers/configuration-clh.toml"
-		clh_path="/opt/kata/bin/cloud-hypervisor-glibc"
+		config_path="/opt/confidential-containers/share/defaults/kata-containers/configuration-clh.toml"
+		clh_path="/opt/confidential-containers/bin/cloud-hypervisor-glibc"
 		sed -i -E 's|(enable_annotations) = .+|\1 = ["enable_iommu", "initrd", "kernel"]|' "${config_path}"
 		sed -i -E "s|(valid_hypervisor_paths) = .+|\1 = [\"${clh_path}\"]|" "${config_path}"
 		sed -i -E "s|(path) = \".+/cloud-hypervisor\"|\1 = \"${clh_path}\"|" "${config_path}"
@@ -175,7 +175,7 @@ function backup_shim() {
 function configure_different_shims_base() {
 	# Currently containerd has an assumption on the location of the shimv2 implementation
 	# This forces kata-deploy to create files in a well-defined location that's part of
-	# the PATH, pointing to the containerd-shim-kata-v2 binary in /opt/kata/bin
+	# the PATH, pointing to the containerd-shim-kata-v2 binary in /opt/confidential-containers/bin
 	# Issues:
 	#   https://github.com/containerd/containerd/issues/3073
 	#   https://github.com/containerd/containerd/issues/5006
@@ -191,9 +191,9 @@ function configure_different_shims_base() {
 		backup_shim "${shim_file}"
 
 		if [[ "${shim}" == "dragonball" ]]; then
-			ln -sf /opt/kata/runtime-rs/bin/containerd-shim-kata-v2 "${shim_file}"
+			ln -sf /opt/confidential-containers/runtime-rs/bin/containerd-shim-kata-v2 "${shim_file}"
 		else
-			ln -sf /opt/kata/bin/containerd-shim-kata-v2 "${shim_file}"
+			ln -sf /opt/confidential-containers/bin/containerd-shim-kata-v2 "${shim_file}"
 		fi
 		chmod +x "$shim_file"
 
@@ -245,7 +245,7 @@ function configure_crio_runtime() {
 
 	local kata_path="/usr/local/bin/containerd-shim-${runtime}-v2"
 	local kata_conf="crio.runtime.runtimes.${runtime}"
-	local kata_config_path="/opt/kata/share/defaults/kata-containers/$configuration.toml"
+	local kata_config_path="/opt/confidential-containers/share/defaults/kata-containers/$configuration.toml"
 
 	cat <<EOF | tee -a "$crio_drop_in_conf_file"
 
@@ -291,7 +291,7 @@ function configure_containerd_runtime() {
 		configuration+="-$2"
 	fi
 	local pluginid=cri
-	
+
 	# if we are running k0s auto containerd.toml generation, the base template is by default version 2
 	# we can safely assume to reference the older version of cri
 	if grep -q "version = 2\>" $containerd_conf_file || [ "$1" == "k0s-worker" ] || [ "$1" == "k0s-controller" ]; then
@@ -300,7 +300,7 @@ function configure_containerd_runtime() {
 	local runtime_table="plugins.${pluginid}.containerd.runtimes.$runtime"
 	local runtime_type="io.containerd.$runtime.v2"
 	local options_table="$runtime_table.options"
-	local config_path="/opt/kata/share/defaults/kata-containers/$configuration.toml"
+	local config_path="/opt/confidential-containers/share/defaults/kata-containers/$configuration.toml"
 	if grep -q "\[$runtime_table\]" $containerd_conf_file; then
 		echo "Configuration exists for $runtime_table, overwriting"
 		sed -i "/\[$runtime_table\]/,+1s#runtime_type.*#runtime_type = \"${runtime_type}\"#" $containerd_conf_file
@@ -349,7 +349,7 @@ function configure_containerd() {
 	fi
 
 	# Add default Kata runtime configuration
-	configure_containerd_runtime "$1" 
+	configure_containerd_runtime "$1"
 
 	for shim in "${shims[@]}"; do
 		configure_containerd_runtime "$1" $shim
@@ -358,7 +358,7 @@ function configure_containerd() {
 
 function remove_artifacts() {
 	echo "deleting kata artifacts"
-	rm -rf /opt/kata/*
+	rm -rf /opt/confidential-containers/*
 }
 
 function cleanup_cri_runtime() {
@@ -436,7 +436,7 @@ function main() {
 		containerd_conf_file="${containerd_conf_tmpl_file}"
 		containerd_conf_file_backup="${containerd_conf_file}.bak"
 	elif [ "$runtime" == "k0s-worker" ] || [ "$runtime" == "k0s-controller" ]; then
-		# From 1.27.1 onwards k0s enables dynamic configuration on containerd CRI runtimes. 
+		# From 1.27.1 onwards k0s enables dynamic configuration on containerd CRI runtimes.
 		# This works by k0s creating a special directory in /etc/k0s/containerd.d/ where user can drop-in partial containerd configuration snippets.
 		# k0s will automatically pick up these files and adds these in containerd configuration imports list.
 		containerd_conf_file="/etc/containerd/kata-containers.toml"
